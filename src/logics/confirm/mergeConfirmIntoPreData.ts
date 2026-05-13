@@ -18,8 +18,13 @@ export function mergeConfirmIntoPreData(
     next.trxToken = d.trxToken.trim()
   }
   if (typeof d.trxId === 'string' && d.trxId) next.trxId = d.trxId
-  const red = typeof d.redirecturl === 'string' ? d.redirecturl.trim() : ''
-  if (red) next.redirecturl = red
+  const red =
+    typeof d.redirectUrl === 'string'
+      ? d.redirectUrl.trim()
+      : typeof d.redirecturl === 'string'
+        ? d.redirecturl.trim()
+        : ''
+  if (red) next.redirectUrl = red
   if (d.order && typeof d.order === 'object') {
     const ord = d.order as ConfirmOrderSummary
     if (typeof ord.orderId === 'string' && ord.orderId.trim()) {

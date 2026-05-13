@@ -13,7 +13,7 @@ export interface SiteFooterOptions {
   translator: Translator
   phase: AppPhase
   merchantName?: string
-  /** Merchant `cancelurl` from pre-initialize when safe to navigate. */
+  /** Merchant `cancelUrl` from pre-initialize when safe to navigate. */
   cancelHref?: string | null
 }
 

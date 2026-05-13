@@ -70,9 +70,9 @@ export interface PreInitializeData {
   availablePaymentMethods: PaymentMethod[]
   extraFields?: Record<string, unknown>
   /** After successful payment: open this URL (e.g. continue / return to merchant). */
-  redirecturl?: string
+  redirectUrl?: string
   /** Cancel / leave checkout: navigate here when present; otherwise history.back(). */
-  cancelurl?: string
+  cancelUrl?: string
   /** Numeric order id from pre-initialize response; shown as Order ID when present. */
   id?: number
 }
@@ -167,6 +167,8 @@ export interface ConfirmPaymentData {
   trxStatus?: string
   trxToken?: string
   trxId?: string
+  redirectUrl?: string
+  /** Legacy API field name; prefer `redirectUrl` when both exist. */
   redirecturl?: string
   miniAppInfo?: MiniAppInfo
   gatewayInfo?: ConfirmGatewayInfo

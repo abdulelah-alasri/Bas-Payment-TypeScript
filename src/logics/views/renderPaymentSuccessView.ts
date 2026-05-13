@@ -29,7 +29,7 @@ export function renderPaymentSuccessView(
       window.print()
     },
     onDone() {
-      const next = model.data?.redirecturl?.trim()
+      const next = model.data?.redirectUrl?.trim()
       if (next && isAllowedMerchantNavigationUrl(next)) {
         window.location.assign(next)
         return

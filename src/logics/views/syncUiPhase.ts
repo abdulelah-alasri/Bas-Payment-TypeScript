@@ -36,7 +36,7 @@ export function syncUiPhase(deps: SyncUiPhaseDeps): void {
     return
   }
   if (model.phase === 'completed') {
-    renderCompletedView({ root, model, translator })
+    renderCompletedView({ root, model, translator, url })
     return
   }
   renderCheckoutView()

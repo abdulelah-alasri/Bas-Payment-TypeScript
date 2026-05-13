@@ -5,7 +5,10 @@ import type { PaymentSuccessSnapshot, PreInitializeData } from '../types/payment
 import { renderAppPage } from './layout'
 import { renderMethodList } from './steps/methodSelect'
 import { renderPhoneStep } from './steps/phoneAndExtras'
-import { isAllowedMerchantNavigationUrl } from '../util/navigationUrl'
+import {
+  formatPreInitializeTransactionDateTimeForCompleted,
+  PRE_INIT_DATETIME_UNAVAILABLE,
+} from '../logics/display/transactionDisplayInstant'
 import { publicAssetUrl } from '../util/publicAsset'
 import { createPaymentPrintReceiptEl } from './paymentPrintReceipt'
 
@@ -97,7 +100,7 @@ export function renderCheckout(
       translator,
       phase: 'checkout',
       merchantName: data.miniAppInfo.name,
-      cancelHref: data.cancelurl,
+      cancelHref: data.cancelUrl,
     },
     (main) => {
   const shell = document.createElement('div')
@@ -266,15 +269,40 @@ export function renderCompleted(
   root: HTMLElement,
   data: PreInitializeData,
   translator: Translator,
-  onContinue: () => void,
+  urlFullName: string,
 ): void {
+  const { t, lang } = translator
+  const resolvedAmount = resolvedPreInitAmount(data)
+  const amountWithCurrency =
+    resolvedAmount != null
+      ? `${formatAmountNumeric(resolvedAmount.value, lang)}\u00A0${resolvedAmount.currency}`.trim()
+      : '—'
+  const dataForPrint: PreInitializeData =
+    resolvedAmount != null
+      ? data
+      : {
+          ...data,
+          amount: { value: 0, currency: 'YER' },
+        }
+  const orderDateRaw =
+    formatPreInitializeTransactionDateTimeForCompleted(data, lang)
+  const orderDateDisplay =
+    orderDateRaw === PRE_INIT_DATETIME_UNAVAILABLE ? '#' : orderDateRaw
+  const trxIdDisplay = (data.trxId ?? '').trim() || '—'
+  const snapshot: PaymentSuccessSnapshot = {
+    pgTransactionId: (data.trxId ?? '').trim(),
+    transactionDateTime: orderDateDisplay,
+    paymentMethodName: '—',
+    accountPhone: '—',
+  }
+
   renderAppPage(
     root,
     {
       translator,
       phase: 'completed',
       merchantName: data.miniAppInfo.name,
-      cancelHref: data.cancelurl,
+      cancelHref: data.cancelUrl,
     },
     (main) => {
       const wrap = document.createElement('div')
@@ -282,7 +310,7 @@ export function renderCompleted(
       wrap.setAttribute('role', 'status')
 
       const iconWrap = document.createElement('div')
-      iconWrap.className = 'completed-icon-wrap'
+      iconWrap.className = 'completed-icon-wrap print-hidden'
       iconWrap.setAttribute('aria-hidden', 'true')
       iconWrap.innerHTML = `<svg class="completed-done-check" viewBox="0 0 64 64" width="64" height="64" xmlns="http://www.w3.org/2000/svg">
         <circle cx="32" cy="32" r="30" fill="#22c55e"/>
@@ -290,18 +318,50 @@ export function renderCompleted(
       </svg>`
       wrap.appendChild(iconWrap)
 
-      const msg = document.createElement('p')
-      msg.className = 'completed-message'
-      msg.textContent = translator.t('transactionCompleted')
-      wrap.appendChild(msg)
-      if (isAllowedMerchantNavigationUrl(data.redirecturl)) {
-        const btn = document.createElement('button')
-        btn.type = 'button'
-        btn.className = 'btn btn-primary btn-block'
-        btn.textContent = translator.t('continueToMerchant')
-        btn.addEventListener('click', onContinue)
-        wrap.appendChild(btn)
-      }
+      const headline = document.createElement('p')
+      headline.className =
+        'completed-message completed-success-headline print-hidden'
+      headline.textContent = t('transactionAlreadyCompletedSuccess')
+      wrap.appendChild(headline)
+
+      const card = document.createElement('div')
+      card.className =
+        'details-card completed-screen-details print-hidden'
+      card.appendChild(
+        detailRow(t('total'), amountWithCurrency, {
+          boldValue: true,
+          valueClass: 'detail-value--numeric',
+        }),
+      )
+      card.appendChild(
+        detailRow(t('transactionId'), trxIdDisplay, {
+          valueClass: 'detail-value--numeric detail-value--trx-id',
+          rowClass: 'detail-row--trx-id',
+        }),
+      )
+      card.appendChild(
+        detailRow(t('transactionDateTime'), orderDateDisplay),
+      )
+      wrap.appendChild(card)
+
+      const printBtn = document.createElement('button')
+      printBtn.type = 'button'
+      printBtn.className = 'btn btn-secondary btn-block print-hidden'
+      printBtn.textContent = t('printReceipt')
+      printBtn.addEventListener('click', () => {
+        window.print()
+      })
+      wrap.appendChild(printBtn)
+
+      wrap.appendChild(
+        createPaymentPrintReceiptEl(
+          dataForPrint,
+          urlFullName,
+          snapshot,
+          translator,
+        ),
+      )
+
       main.appendChild(wrap)
     },
     'center',
@@ -350,7 +410,7 @@ export function renderPaymentSuccess(
       translator,
       phase: 'paymentSuccess',
       merchantName: data.miniAppInfo.name,
-      cancelHref: data.cancelurl,
+      cancelHref: data.cancelUrl,
     },
     (main) => {
       const shell = document.createElement('div')
@@ -539,6 +599,39 @@ function displayOrderReference(data: PreInitializeData): string {
   return '—'
 }
 
+/** Safe read of pre-initialize amount (API may send strings or omit nested fields). */
+function resolvedPreInitAmount(
+  data: PreInitializeData,
+): { value: number; currency: string } | null {
+  const a = data.amount as { value?: unknown; currency?: unknown } | undefined
+  if (!a || typeof a !== 'object') return null
+  const rawV = a.value
+  let value: number
+  if (typeof rawV === 'number') {
+    value = rawV
+  } else if (typeof rawV === 'string') {
+    value = Number.parseFloat(rawV.trim())
+  } else {
+    return null
+  }
+  if (!Number.isFinite(value)) return null
+  const cur =
+    typeof a.currency === 'string' ? a.currency.trim().toUpperCase() : ''
+  return { value, currency: cur || '—' }
+}
+
+function formatAmountNumeric(value: number, lang: AppLang): string {
+  try {
+    const intlLocale = lang === 'ar' ? 'ar' : 'en'
+    return new Intl.NumberFormat(intlLocale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)
+  } catch {
+    return value.toFixed(2)
+  }
+}
+
 function formatAmount(
   value: number,
   currency: string,
@@ -568,19 +661,28 @@ function formatCommissionLine(item: unknown): string {
   }
 }
 
+function addSpaceSeparatedClasses(el: Element, classString: string | undefined): void {
+  if (!classString?.trim()) return
+  for (const token of classString.trim().split(/\s+/)) {
+    if (token) el.classList.add(token)
+  }
+}
+
 function detailRow(
   label: string,
   value: string,
-  opts?: { boldValue?: boolean },
+  opts?: { boldValue?: boolean; valueClass?: string; rowClass?: string },
 ): HTMLElement {
   const row = document.createElement('div')
   row.className = 'detail-row'
+  addSpaceSeparatedClasses(row, opts?.rowClass)
   const l = document.createElement('span')
   l.className = 'detail-label'
   l.textContent = label
   const v = document.createElement('span')
   v.className = 'detail-value'
   if (opts?.boldValue) v.classList.add('detail-value--bold')
+  addSpaceSeparatedClasses(v, opts?.valueClass)
   v.textContent = value
   row.appendChild(l)
   row.appendChild(v)

@@ -137,7 +137,9 @@ export async function handleConfirmPayment(
     return
   }
 
-  const nextRedirect = result.data.redirecturl?.trim()
+  const nextRedirect = (
+    result.data.redirectUrl ?? result.data.redirecturl
+  )?.trim()
   if (nextRedirect && isAllowedMerchantNavigationUrl(nextRedirect)) {
     window.location.assign(nextRedirect)
     return
