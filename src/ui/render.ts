@@ -50,7 +50,6 @@ export function renderCheckout(
     data: PreInitializeData
     step: 1 | 2
     selectedMethodId: number
-    showExtraFields: boolean
     requireOtp?: boolean
     mobile: string
     extraFieldValues: Record<string, string>
@@ -71,7 +70,6 @@ export function renderCheckout(
     data,
     step,
     selectedMethodId,
-    showExtraFields,
     requireOtp,
     mobile,
     extraFieldValues,
@@ -219,7 +217,6 @@ export function renderCheckout(
       selected,
       {
         mobile,
-        showExtraFields,
         requireOtp,
         extraFieldValues,
         errorMessage: checkoutStepError,

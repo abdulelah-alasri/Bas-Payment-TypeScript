@@ -58,6 +58,41 @@ body {
   justify-content: center;
 }
 
+/* Corner ribbon when VITE_MODE=test (fixed top-end, diagonal like a debug ribbon) */
+.env-test-ribbon-host {
+  position: fixed;
+  top: 0;
+  inset-inline-end: 0;
+  width: 104px;
+  height: 104px;
+  overflow: hidden;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.env-test-ribbon {
+  position: absolute;
+  top: 22px;
+  inset-inline-end: -46px;
+  width: 168px;
+  margin: 0;
+  padding: 7px 0;
+  background: #b91c1c;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-transform: uppercase;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+  transform: rotate(45deg);
+}
+
+[dir='rtl'] .env-test-ribbon {
+  transform: rotate(-45deg);
+}
+
 .shell {
   flex: 1;
   width: 100%;

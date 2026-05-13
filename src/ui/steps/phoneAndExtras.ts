@@ -1,9 +1,9 @@
 import type { ParameterName, PaymentMethod } from '../../types/payment'
 import type { Translator } from '../../i18n'
+import { visibleMethodParametersForPayment } from '../../util/paymentMethodParams'
 
 export interface PhoneStepModel {
   mobile: string
-  showExtraFields: boolean
   /** When initiate response includes OTP requirement */
   requireOtp?: boolean
   extraFieldValues: Record<string, string>
@@ -120,6 +120,8 @@ export function renderPhoneStep(
     container.appendChild(accCard)
   }
 
+  const methodParams = visibleMethodParametersForPayment(method)
+
   if (!showAccount) {
     const phoneWrap = document.createElement('div')
     phoneWrap.className = 'field-block'
@@ -143,6 +145,27 @@ export function renderPhoneStep(
     phoneWrap.appendChild(phoneLabel)
     phoneWrap.appendChild(phoneInput)
     container.appendChild(phoneWrap)
+
+    for (let i = 0; i < methodParams.length; i++) {
+      const p = methodParams[i]!
+      appendParameterFieldBlock(
+        container,
+        p,
+        model,
+        busy,
+        t,
+        onExtraChange,
+        onSendCode,
+        onConfirmPayment,
+        {
+          showOtpTimer: false,
+          otpCountdownRemaining: null,
+          enterAction: 'send',
+          isLastInGroup: i === methodParams.length - 1,
+          singleInConfirmGroup: false,
+        },
+      )
+    }
 
     const sendBtn = document.createElement('button')
     sendBtn.type = 'button'
@@ -179,92 +202,31 @@ export function renderPhoneStep(
     }
   }
 
-  if (model.showExtraFields) {
-    let visibleParams: ParameterName[] =
-      method.parametersNames?.filter((p) => p.visible === 1) ?? []
-    if (
-      model.requireOtp &&
-      !visibleParams.some((p) => p.key.toUpperCase() === 'OTP')
-    ) {
-      visibleParams = [
-        ...visibleParams,
-        {
-          key: 'OTP',
-          type: 'text',
-          title: t('otpLabel'),
-          desc: '',
-          visible: 1,
-        },
-      ]
+  if (showAccount && model.requireOtp) {
+    const otpParam: ParameterName = {
+      key: 'OTP',
+      type: 'text',
+      title: t('otpLabel'),
+      desc: '',
+      visible: 1,
     }
-    for (let i = 0; i < visibleParams.length; i++) {
-      const p = visibleParams[i]!
-      const block = document.createElement('div')
-      block.className = 'field-block'
-      const isOtpField = p.key.toUpperCase() === 'OTP'
-      const showOtpTimer =
-        isOtpField &&
-        Boolean(model.requireOtp) &&
-        showAccount &&
-        model.otpCountdownRemaining != null
-
-      if (showOtpTimer) {
-        const labelRow = document.createElement('div')
-        labelRow.className = 'field-label-row'
-        const lab = document.createElement('label')
-        lab.className = 'field-label field-label--grow'
-        lab.htmlFor = `extra-${p.key}`
-        lab.textContent = p.title || p.key
-        labelRow.appendChild(lab)
-        const rem = model.otpCountdownRemaining!
-        if (rem > 0) {
-          const cd = document.createElement('span')
-          cd.id = 'otp-countdown-display'
-          cd.className = 'otp-countdown'
-          cd.setAttribute('aria-live', 'polite')
-          cd.setAttribute('aria-atomic', 'true')
-          cd.textContent = formatOtpCountdown(rem)
-          labelRow.appendChild(cd)
-        } else {
-          const resend = document.createElement('button')
-          resend.type = 'button'
-          resend.className = 'otp-resend-link'
-          resend.textContent = t('otpResend')
-          resend.disabled = busy
-          resend.addEventListener('click', () => onSendCode())
-          labelRow.appendChild(resend)
-        }
-        block.appendChild(labelRow)
-      } else {
-        const lab = document.createElement('label')
-        lab.className = 'field-label'
-        lab.htmlFor = `extra-${p.key}`
-        lab.textContent = p.title || p.key
-        block.appendChild(lab)
-      }
-
-      const inp = document.createElement('input')
-      inp.id = `extra-${p.key}`
-      inp.className = 'field-input'
-      inp.type = p.type === 'number' ? 'number' : 'text'
-      inp.value = model.extraFieldValues[p.key] ?? ''
-      inp.disabled = busy
-      inp.addEventListener('input', () => onExtraChange(p.key, inp.value))
-      const singleExtra = visibleParams.length === 1
-      const isLastExtra = i === visibleParams.length - 1
-      if (
-        model.showConfirmPayment &&
-        (singleExtra || isOtpField || isLastExtra)
-      ) {
-        inp.addEventListener('keydown', (e) => {
-          if (e.key !== 'Enter') return
-          e.preventDefault()
-          if (!busy) onConfirmPayment()
-        })
-      }
-      block.appendChild(inp)
-      container.appendChild(block)
-    }
+    appendParameterFieldBlock(
+      container,
+      otpParam,
+      model,
+      busy,
+      t,
+      onExtraChange,
+      onSendCode,
+      onConfirmPayment,
+      {
+        showOtpTimer: true,
+        otpCountdownRemaining: model.otpCountdownRemaining ?? null,
+        enterAction: 'confirm',
+        isLastInGroup: true,
+        singleInConfirmGroup: true,
+      },
+    )
   }
 
   if (showAccount && model.showConfirmPayment) {
@@ -300,6 +262,98 @@ export function renderPhoneStep(
       container.appendChild(err)
     }
   }
+}
+
+function appendParameterFieldBlock(
+  container: HTMLElement,
+  p: ParameterName,
+  model: PhoneStepModel,
+  busy: boolean,
+  t: Translator['t'],
+  onExtraChange: (key: string, value: string) => void,
+  onSendCode: () => void,
+  onConfirmPayment: () => void,
+  opts: {
+    showOtpTimer: boolean
+    otpCountdownRemaining: number | null
+    enterAction: 'send' | 'confirm'
+    isLastInGroup: boolean
+    singleInConfirmGroup: boolean
+  },
+): void {
+  const block = document.createElement('div')
+  block.className = 'field-block'
+  const isOtpField = p.key.toUpperCase() === 'OTP'
+  const showOtpTimer =
+    opts.showOtpTimer &&
+    isOtpField &&
+    Boolean(model.requireOtp) &&
+    opts.otpCountdownRemaining != null
+
+  if (showOtpTimer) {
+    const labelRow = document.createElement('div')
+    labelRow.className = 'field-label-row'
+    const lab = document.createElement('label')
+    lab.className = 'field-label field-label--grow'
+    lab.htmlFor = `extra-${p.key}`
+    lab.textContent = p.title || p.key
+    labelRow.appendChild(lab)
+    const rem = opts.otpCountdownRemaining!
+    if (rem > 0) {
+      const cd = document.createElement('span')
+      cd.id = 'otp-countdown-display'
+      cd.className = 'otp-countdown'
+      cd.setAttribute('aria-live', 'polite')
+      cd.setAttribute('aria-atomic', 'true')
+      cd.textContent = formatOtpCountdown(rem)
+      labelRow.appendChild(cd)
+    } else {
+      const resend = document.createElement('button')
+      resend.type = 'button'
+      resend.className = 'otp-resend-link'
+      resend.textContent = t('otpResend')
+      resend.disabled = busy
+      resend.addEventListener('click', () => onSendCode())
+      labelRow.appendChild(resend)
+    }
+    block.appendChild(labelRow)
+  } else {
+    const lab = document.createElement('label')
+    lab.className = 'field-label'
+    lab.htmlFor = `extra-${p.key}`
+    lab.textContent = p.title || p.key
+    block.appendChild(lab)
+  }
+
+  const inp = document.createElement('input')
+  inp.id = `extra-${p.key}`
+  inp.className = 'field-input'
+  inp.type = p.type === 'number' ? 'number' : 'text'
+  inp.value = model.extraFieldValues[p.key] ?? ''
+  inp.disabled = busy
+  inp.addEventListener('input', () => onExtraChange(p.key, inp.value))
+
+  const shouldEnterConfirm =
+    opts.enterAction === 'confirm' &&
+    model.showConfirmPayment &&
+    (opts.singleInConfirmGroup || isOtpField || opts.isLastInGroup)
+
+  if (opts.enterAction === 'send' && opts.isLastInGroup) {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return
+      e.preventDefault()
+      if (!busy) onSendCode()
+    })
+  } else if (shouldEnterConfirm) {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return
+      e.preventDefault()
+      if (!busy) onConfirmPayment()
+    })
+  }
+
+  block.appendChild(inp)
+  container.appendChild(block)
 }
 
 function placeholderInitial(name: string): HTMLElement {
